@@ -1,0 +1,327 @@
+---
+title: "The Rhein Water Level Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    fig_mobile: TRUE
+    theme: 
+      version: 5
+      bootswatch: flatly
+---
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+### About this Dashboard
+
+
+
+---
+
+**Why the Rhein:**
+
+The Rhine River serves as a vital ecological sanctuary and crucial resting hub for migratory birds, while holding profound cultural, recreational, and contemplative place for the communities along its banks beyond its key role in commercial navigation. For these reasons, 
+we have developed this dashboard out of our appreciation and love for the river that we truly enjoy.
+
+This dashboard tracks daily Rhine River water levels in Cologne, providing short-term forecasts and flood/drought risk analysis. 
+
+Created by **Armond Angeles** (*Raster Ninja*). 
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dygraphs)
+library(xts)
+library(wordcloud2)
+library(leaflet)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+
+# Note: Assumes 'koln_daily', 'fc_summary', and 'words_clean' are available in your workspace
+
+# Load saved workspace objects automatically when knitting. But first, object in the Global environment have to saved in the Console (bottom-left # # screen)
+load("dashboard_data.RData")
+
+```
+Row {data-height=20}
+----------------------------------------------------------
+
+### Current Water Level
+```{r echo=FALSE}
+# Value Box 1: Current Water Level
+
+latest_level <- tail(koln_dt$value, 1)
+
+# Assign colors dynamically based on a threshold (e.g., 80 cm)
+# Below 80cm = High-contrast orange (#D95F02), Normal = Deep navy (#1F4E79)
+dynamic_color <- ifelse(latest_level < 80, "#BA0D46", "#0B3B81")
+
+# You can even make the icon dynamic!
+dynamic_icon <- ifelse(latest_level < 80, "fa-exclamation-triangle", "fa-water")
+
+valueBox(
+  value = paste0(latest_level, " cm"),
+  caption = "Current Water Level",
+  icon = dynamic_icon,
+  color = dynamic_color
+)
+```
+
+### Critical Number of Days 
+```{r echo=FALSE}
+# Count low water days specifically for 2026
+critical_days_2026 <- sum(
+  koln_daily$value < 80 & format(koln_daily$Date, "%Y") == "2026", 
+  na.rm = TRUE
+)
+
+valueBox(
+  value = critical_days_2026,
+  caption = "Low Water Days (<80 cm) in 2026",
+  icon = "fa-triangle-exclamation",
+  color = ifelse(critical_days_2026 > 0, "#F5C700", "#4077FF")
+)
+```
+
+### Next Day's Forecast
+```{r echo=FALSE}
+# Dynamically extract the 1-day ahead Direct-ARIMA point forecast
+# Extract tomorrow's forecasted value
+# (Update 'fc_value' column name to match your fc_summary object)
+next_day_val <- fc_summary %>% 
+  filter(Date == Sys.Date() + 1) %>% 
+  pull(Forecast_Level)
+
+# Fallback in case indexing or date filtering returns empty/NA
+display_val <- if (length(next_day_val) > 0 && !is.na(next_day_val[1])) {
+  paste(round(next_day_val[1], 0), "cm")
+} else {
+  "N/A"
+}
+
+valueBox(
+  value = display_val,
+  caption = "Next Day Forecast (Direct-ARIMA)",
+  icon = "fa-chart-line",
+  color = "#5D91BA"
+  )
+```
+
+### Data Freshness
+```{r echo=FALSE}
+# Extract most recent timestamp
+last_updated <- max(koln_daily$Date)
+
+valueBox(
+  value = format(last_updated, "%b %d, %Y"),
+  caption = "Last Updated",
+  icon = "fa-clock",
+  color = "#EDBEFC"
+)
+```
+Row {data-height=600}
+----------------------------------------------------------
+
+### Rhine Water Level Over Time
+```{r echo=FALSE}
+koln_xts <- xts(x = koln_daily$value, order.by = koln_daily$Date)
+
+dygraph(koln_xts,ylab = "Water Level (cm)") %>%
+  dySeries("V1", label = "Water Level", color = "#1f78b4") %>%
+  dyOptions(
+    fillGraph = TRUE, 
+    fillAlpha = 0.15, 
+    drawGrid = TRUE,
+    axisLineColor = "#555555"
+  ) %>%
+  dyRangeSelector() %>%
+  dyCrosshair(direction = "vertical") %>%
+  dyUnzoom()
+```
+Row {data-height=500}
+----------------------------------------------------------
+
+### Flood vs Drought Zone Comparison {data-width=400}
+```{r echo=FALSE}
+
+library(leaflet)
+library(leaflet.extras2)
+
+leaflet() %>%
+  # Create two distinct map panes for left and right views
+  addMapPane("left", zIndex = 0) %>%
+  addMapPane("right", zIndex = 0) %>%
+  
+  # Left Side: Low Water / Drought View (Light Basemap)
+  addProviderTiles(providers$CartoDB.Positron, group = "drought", layerId = "drought_map", options = pathOptions(pane = "left")) %>%
+  
+  # Right Side: High Water / Flood View (Satellite View)
+  addProviderTiles(providers$Esri.WorldImagery, group = "flood", layerId = "flood_map", options = pathOptions(pane = "right")) %>%
+  
+  # Bayenthal location marker
+  addMarkers(
+    lng = 6.9603, lat = 50.9375,
+    popup = "<b>Köln Pegel Station</b>"
+  ) %>%
+  
+  # Add interactive side-by-side split slider (note the lowercase 's')
+  addSidebyside(
+    layerId = "sidecontrols",
+    leftId = "drought_map",
+    rightId = "flood_map"
+  ) %>%
+  setView(lng = 6.980, lat = 50.915, zoom = 15)
+```
+
+### Social Media Keyword Cloud {data-width=300}
+```{r echo=FALSE}
+
+library(echarts4r)
+library(dplyr)
+
+# 1. Create a color palette function matching your theme
+pal <- colorRampPalette(c("#1F4E79", "#FF8946", "#B71050"))
+
+words_top <- words_clean %>%
+  slice_max(order_by = n, n = 45) %>%
+  arrange(n) %>%
+  mutate(color = pal(n())) # Assigns gradient colors mapped to word frequency
+
+words_top %>%
+  e_charts(word) %>%
+  e_cloud(
+    word, 
+    n, 
+    color, # Passes the individual word color column directly
+    shape = "circle", 
+    sizeRange = c(10, 45), 
+    rotationRange = c(-45, 45), 
+    gridSize = 8
+  ) %>%
+  e_tooltip(trigger = "item")
+```
+
+### Shipping Restriction Distribution {data-width=300}
+```{r echo=FALSE}
+
+library(tidyverse)
+library(plotly)
+library(lubridate)
+library(htmltools)
+
+# 1. Aggregated Data
+shipping_summary <- water_level_analyzed %>%
+  mutate(Year = factor(year(Date))) %>%
+  count(Year, shipping_status, name = "Days")
+
+# 2. Build Plotly Chart
+p <- plot_ly(
+  data = shipping_summary,
+  x = ~Year,
+  y = ~Days,
+  color = ~shipping_status,
+  colors = c("#1F4E79", "#D95F02", "#C0392B"),
+  type = "bar",
+  hovertemplate = "<b>%{x}</b><br>%{fullData.name}: %{y} Days<extra></extra>"
+) %>%
+  layout(
+    barmode = "stack",
+    xaxis = list(title = ""),
+    yaxis = list(title = "Days"),
+    legend = list(orientation = "h", x = 0, y = -0.3),
+    autosize = TRUE,
+    margin = list(t = 20, b = 40, l = 35, r = 10)
+  )
+
+# 3. Force CSS container height so it doesn't collapse to 0px
+tags$div(
+  style = "height: 400px; width: 100%; position: relative;",
+  p
+)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
