@@ -30,7 +30,7 @@ Created by **Armond Angeles** (*Raster Ninja*).
 
 
 
-<div style="font-size: 12px; color: #94a3b8; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+<div style="font-size: 14px; color: #94a3b8; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
   <strong>Data Source:</strong> <a href="https://www.pegelonline.wsv.de/gast/stammdaten?pegelnr=2730010" target="_blank" style="color: #38bdf8; text-decoration: none;">PEGELONLINE</a>
 </div>
 
