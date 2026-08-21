@@ -8,6 +8,7 @@ output:
     theme: 
       version: 5
       bootswatch: flatly
+output_file: "index.html"      
 ---
 
 Sidebar {.sidebar data-width=250}
