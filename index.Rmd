@@ -181,7 +181,7 @@ leaflet() %>%
   setView(lng = 6.980, lat = 50.915, zoom = 15)
 ```
 
-### Social Media Keyword Cloud {data-width=300}
+### Social Media Cloud (Hashtag = "Rhein") {data-width=300}
 ```{r echo=FALSE}
 
 library(echarts4r)
