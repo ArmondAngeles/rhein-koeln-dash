@@ -191,7 +191,7 @@ library(dplyr)
 pal <- colorRampPalette(c("#1F4E79", "#FF8946", "#B71050"))
 
 words_top <- words_clean %>%
-  slice_max(order_by = n, n = 40) %>%
+  slice_max(order_by = n, n = 35) %>%
   arrange(n) %>%
   mutate(color = pal(n())) # Assigns gradient colors mapped to word frequency
 
